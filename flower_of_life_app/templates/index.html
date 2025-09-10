@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生命之花分析系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* 加载动画样式 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .loading-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #4CAF50;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 18px;
+            color: #333;
+        }
+        
+        /* 下载链接样式 */
+        .download-link {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .download-link:hover {
+            background-color: #45a049;
+        }
+        
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>生命之花分析系统</h1>
+        <p>AI驱动的图像分析与报告生成平台</p>
+    </header>
+    
+    <nav>
+        <a href="/">首页</a>
+        <a href="/docs">API文档</a>
+    </nav>
+
+    <div class="container">
+        <div class="card">
+            <h2>图片分析</h2>
+            <form id="analysisForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="image_option">选择图片输入方式：</label>
+                    <select name="image_option" id="image_option" onchange="toggleImageInput()">
+                        <option value="url">网络图片链接</option>
+                        <option value="upload">上传本地图片</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="url_input">
+                    <label for="image_url">图片URL：</label>
+                    <input type="url" id="image_url" name="image_url" placeholder="请输入网络图片链接">
+                </div>
+                
+                <div class="form-group" id="file_input" style="display: none;">
+                    <label for="image_file">上传图片（图片不能大于10M）：</label>
+                    <input type="file" id="image_file" name="image_file" accept="image/*">
+                </div>
+                
+                <div class="form-group">
+                    <label for="name">姓名：</label>
+                    <input type="text" id="name" name="name" placeholder="请输入您的姓名" required>
+                </div>
+                
+                <button type="submit">开始分析</button>
+            </form>
+        </div>
+
+        <div id="result" class="card" style="display: none;">
+            <h2>分析结果</h2>
+            <div id="resultContent"></div>
+        </div>
+    </div>
+    
+    <!-- 加载动画遮罩层 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div class="loading-text">正在分析生命之花图案，请稍候...</div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2023 生命之花分析系统. 保留所有权利.</p>
+    </footer>
+
+    <script>
+        function toggleImageInput() {
+            const option = document.getElementById('image_option').value;
+            const urlInput = document.getElementById('url_input');
+            const fileInput = document.getElementById('file_input');
+            
+            if (option === 'url') {
+                urlInput.style.display = 'block';
+                fileInput.style.display = 'none';
+            } else {
+                urlInput.style.display = 'none';
+                fileInput.style.display = 'block';
+            }
+        }
+
+        document.getElementById('analysisForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // 显示加载动画
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.style.display = 'flex';
+            
+            const formData = new FormData(this);
+            
+            fetch('/web/analyze', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 隐藏加载动画
+                loadingOverlay.style.display = 'none';
+                
+                const resultDiv = document.getElementById('result');
+                const resultContent = document.getElementById('resultContent');
+                
+                if (data.success) {
+                    resultContent.innerHTML = `
+                        <p>分析已完成！</p>
+                        <a href="/web/download/${data.txt_filename}" class="download-link">下载TXT报告</a>
+                        <a href="/web/download/${data.pdf_filename}" class="download-link">下载PDF报告</a>
+                    `;
+                } else {
+                    resultContent.innerHTML = `
+                        <div class="error">
+                            <p>分析失败：${data.error_message}</p>
+                        </div>
+                    `;
+                }
+                
+                resultDiv.style.display = 'block';
+            })
+            .catch(error => {
+                // 隐藏加载动画
+                loadingOverlay.style.display = 'none';
+                
+                const resultDiv = document.getElementById('result');
+                const resultContent = document.getElementById('resultContent');
+                
+                resultContent.innerHTML = `
+                    <div class="error">
+                        <p>请求失败：${error.message}</p>
+                    </div>
+                `;
+                
+                resultDiv.style.display = 'block';
+            });
+        });
+    </script>
+</body>
+</html>

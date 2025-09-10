@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API文档 - 生命之花分析系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>生命之花分析系统</h1>
+        <p>API接口文档</p>
+    </header>
+    
+    <nav>
+        <a href="/">首页</a>
+        <a href="/docs">API文档</a>
+    </nav>
+
+    <div class="container">
+        <div class="api-docs">
+            <h2>API接口文档</h2>
+            <p>本文档描述了生命之花分析系统的RESTful API接口。</p>
+            
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method">POST</span>
+                    <span class="endpoint-path">/api/analyze</span>
+                </div>
+                <div class="endpoint-description">
+                    <p><strong>功能：</strong>分析生命之花图片并生成报告</p>
+                    <p><strong>描述：</strong>上传生命之花图片，系统将调用AI模型进行分析并生成TXT和PDF格式的报告。</p>
+                </div>
+                
+                <h4>请求参数</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>参数名</th>
+                            <th>类型</th>
+                            <th>必需</th>
+                            <th>描述</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>image_url</td>
+                            <td>string</td>
+                            <td>否</td>
+                            <td>网络图片URL（与image_file二选一）</td>
+                        </tr>
+                        <tr>
+                            <td>image_file</td>
+                            <td>file</td>
+                            <td>否</td>
+                            <td>上传本地图片文件（与image_url二选一）</td>
+                        </tr>
+                        <tr>
+                            <td>name</td>
+                            <td>string</td>
+                            <td>是</td>
+                            <td>用户姓名</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h4>响应示例</h4>
+                <pre>
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "message": "分析完成",
+  "result": {
+    "txt_file": "生命之花分析报告-张三09.05.txt",
+    "pdf_file": "生命之花分析报告-张三09.05.pdf"
+  }
+}
+                </pre>
+            </div>
+            
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/api/task/{task_id}</span>
+                </div>
+                <div class="endpoint-description">
+                    <p><strong>功能：</strong>获取任务状态</p>
+                    <p><strong>描述：</strong>根据任务ID查询分析任务的当前状态。</p>
+                </div>
+                
+                <h4>路径参数</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>参数名</th>
+                            <th>类型</th>
+                            <th>必需</th>
+                            <th>描述</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>task_id</td>
+                            <td>string</td>
+                            <td>是</td>
+                            <td>任务ID</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h4>响应示例</h4>
+                <pre>
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "message": "分析完成",
+  "result": {
+    "txt_file": "生命之花分析报告-张三09.05.txt",
+    "pdf_file": "生命之花分析报告-张三09.05.pdf"
+  }
+}
+                </pre>
+            </div>
+            
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/api/download/{filename}</span>
+                </div>
+                <div class="endpoint-description">
+                    <p><strong>功能：</strong>下载报告文件</p>
+                    <p><strong>描述：</strong>下载生成的TXT或PDF报告文件。</p>
+                </div>
+                
+                <h4>路径参数</h4>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>参数名</th>
+                            <th>类型</th>
+                            <th>必需</th>
+                            <th>描述</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>filename</td>
+                            <td>string</td>
+                            <td>是</td>
+                            <td>文件名</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="card">
+                <h3>使用示例</h3>
+                <h4>Python示例</h4>
+                <pre>
+import requests
+
+# 上传网络图片进行分析
+response = requests.post(
+    'http://localhost:5000/api/analyze',
+    data={
+        'image_url': 'https://example.com/flower.jpg',
+        'name': '张三'
+    }
+)
+
+# 上传本地图片进行分析
+with open('flower.jpg', 'rb') as f:
+    response = requests.post(
+        'http://localhost:5000/api/analyze',
+        files={'image_file': f},
+        data={'name': '张三'}
+    )
+
+result = response.json()
+task_id = result['task_id']
+
+# 查询任务状态
+status_response = requests.get(f'http://localhost:5000/api/task/{task_id}')
+status = status_response.json()
+
+# 下载报告文件
+txt_file = status['result']['txt_file']
+pdf_file = status['result']['pdf_file']
+
+txt_response = requests.get(f'http://localhost:5000/api/download/{txt_file}')
+with open('report.txt', 'wb') as f:
+    f.write(txt_response.content)
+                </pre>
+                
+                <h4>cURL示例</h4>
+                <pre>
+# 上传网络图片
+curl -X POST http://localhost:5000/api/analyze \
+  -F "image_url=https://example.com/flower.jpg" \
+  -F "name=张三"
+
+# 上传本地图片
+curl -X POST http://localhost:5000/api/analyze \
+  -F "image_file=@flower.jpg" \
+  -F "name=张三"
+
+# 查询任务状态
+curl http://localhost:5000/api/task/{task_id}
+
+# 下载文件
+curl http://localhost:5000/api/download/{filename} -o report.pdf
+                </pre>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2023 生命之花分析系统. 保留所有权利.</p>
+    </footer>
+</body>
+</html>
