@@ -140,7 +140,11 @@ def api_analyze():
             "error": "缺少必要参数",
             "message": "必须提供用户姓名"
         }), 400
-    
+    #读取可选提示词
+    prompt_override = request.form.get('prompt', '').strip() or None
+    # # 调用时传入
+    # txt_file_path, error = analyze_image(image_path, name, prompt_override)
+
     # 处理图片输入
     image_path = None
     if 'image_url' in request.form and request.form['image_url']:
@@ -152,74 +156,33 @@ def api_analyze():
             # 保存上传的文件到临时位置
             filename = secure_filename(file.filename)
             # 确保扩展名是正确的格式
-            name, ext = os.path.splitext(filename)
+            base_name, ext = os.path.splitext(filename)
             if ext and ext.lower() in ['.png', '.jpg', '.jpeg', '.bmp', '.gif']:
                 image_path = os.path.join('output', f"{uuid.uuid4()}{ext.lower()}")
                 file.save(image_path)
             else:
-                # 如果没有扩展名或扩展名不支持，尝试检测文件类型
                 if not ext:
-                    # 尝试检测文件类型
-                    # import imghdr
-                    # file_path = os.path.join('output', f"{uuid.uuid4()}_temp")
-                    # file.save(file_path)
-                    # detected_type = imghdr.what(file_path)
-                    # 使用 PIL.Image 替代 imghdr
-                    # from PIL import Image
-                    # try:
-                    #     with Image.open(file_path) as img:
-                    #         detected_type = img.format.lower()
-                    # except Exception:
-                    #     detected_type = None
-                    # if detected_type and detected_type in ['png', 'jpeg', 'gif', 'bmp']:
-                    #     # 重新命名文件加上正确的扩展名
-                    #     correct_ext = '.' + detected_type if detected_type != 'jpeg' else '.jpg'
-                    #     final_path = file_path + correct_ext
-                    #     os.rename(file_path, final_path)
-                    #     image_path = final_path
-                    # else:
-                    #     # 清理临时文件并返回错误
-                    #     if os.path.exists(file_path):
-                    #         os.remove(file_path)
-                    #     return jsonify({
-                    #         "error": "参数错误",
-                    #         "message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"
-                    #     }), 400
-                    # 保存上传文件到临时路径
                     temp_filename = f"{uuid.uuid4()}_temp"
                     file_path = os.path.join('output', temp_filename)
                     file.save(file_path)
-
-                    # 使用 PIL 检测文件类型
                     try:
                         with Image.open(file_path) as img:
                             detected_type = img.format.lower()
                     except Exception:
                         detected_type = None
-
                     if detected_type and detected_type in ['png', 'jpeg', 'gif', 'bmp']:
                         correct_ext = '.' + detected_type if detected_type != 'jpeg' else '.jpg'
                         final_path = file_path + correct_ext
                         os.rename(file_path, final_path)
                         image_path = final_path
                     else:
-                        # 清理临时文件并返回错误
                         if os.path.exists(file_path):
                             os.remove(file_path)
-                        return jsonify({
-                            "success": False,
-                            "error_message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"
-                        })
+                        return jsonify({"success": False,"error_message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"})
                 else:
-                    return jsonify({
-                        "error": "参数错误",
-                        "message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"
-                    }), 400
+                    return jsonify({"error": "参数错误","message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"}), 400
     else:
-        return jsonify({
-            "error": "参数错误",
-            "message": "必须提供图片URL或上传图片文件"
-        }), 400
+        return jsonify({"error": "参数错误","message": "必须提供图片URL或上传图片文件"}), 400
     
     # 压缩图片（如果需要）
     if image_path and os.path.exists(image_path):
@@ -237,42 +200,25 @@ def api_analyze():
     }
     
     try:
-        # 调用分析函数（异步处理）
-        txt_file_path, error = analyze_image(image_path, name)
-        
+        # 仅调用一次，并且把可选提示词传递进去  —— FIX: 去重
+        # txt_file_path, error = analyze_image(image_path, name)  # (旧) 多余调用
+        txt_file_path, error = analyze_image(image_path, name, prompt_override)
+
         if error:
-            analysis_tasks[task_id] = {
-                "status": "failed",
-                "message": f"分析失败: {error}"
-            }
-            return jsonify({
-                "task_id": task_id,
-                "status": "failed",
-                "message": f"分析失败: {error}"
-            }), 500
+            analysis_tasks[task_id] = {"status": "failed","message": f"分析失败: {error}"}
+            return jsonify({"task_id": task_id,"status": "failed","message": f"分析失败: {error}"}), 500
         
-        # 生成PDF，将用户输入的姓名和图片路径传递给PDF生成器
         pdf_file_path = generate_pdf_from_txt(txt_file_path, image_path, name)
-        
-        # 获取文件名用于下载链接
         txt_filename = os.path.basename(txt_file_path)
         pdf_filename = os.path.basename(pdf_file_path)
         
         analysis_tasks[task_id] = {
-            "status": "completed",
-            "message": "分析完成",
-            "txt_filename": txt_filename,
-            "pdf_filename": pdf_filename
+            "status": "completed","message": "分析完成",
+            "txt_filename": txt_filename,"pdf_filename": pdf_filename
         }
-        
         return jsonify({
-            "task_id": task_id,
-            "status": "completed",
-            "message": "分析完成",
-            "result": {
-                "txt_file": txt_filename,
-                "pdf_file": pdf_filename
-            }
+            "task_id": task_id,"status": "completed","message": "分析完成",
+            "result": {"txt_file": txt_filename,"pdf_file": pdf_filename}
         })
         
     except Exception as e:
@@ -372,137 +318,69 @@ def download_file(filename):
 # Web界面路由
 @app.route('/web/analyze', methods=['POST'])
 def web_analyze():
-    """Web界面分析处理"""
-    name = request.form.get('name', '未知用户')
+    user_name = request.form.get('name', '未知用户')
     
-    # 处理图片输入
     image_path = None
     if request.form.get('image_option') == 'url':
         image_path = request.form.get('image_url')
         if not image_path:
-            return jsonify({
-                "success": False, 
-                "error_message": "请输入图片URL"
-            })
+            return jsonify({"success": False, "error_message": "请输入图片URL"})
     else:
-        # 处理上传的文件
         if 'image_file' not in request.files:
-            return jsonify({
-                "success": False, 
-                "error_message": "请选择图片文件"
-            })
-        
+            return jsonify({"success": False, "error_message": "请选择图片文件"})
         file = request.files['image_file']
         if file.filename == '':
-            return jsonify({
-                "success": False, 
-                "error_message": "请选择图片文件"
-            })
-        
+            return jsonify({"success": False, "error_message": "请选择图片文件"})
         if file:
-            # 保存上传的文件到临时位置
             filename = secure_filename(file.filename)
-            # 修正文件扩展名处理
-            name, ext = os.path.splitext(filename)
+            base_name, ext = os.path.splitext(filename)   # <-- 修正：不要用 name 覆盖
             if ext and ext.lower() in ['.png', '.jpg', '.jpeg', '.bmp', '.gif']:
                 image_path = os.path.join('output', f"{uuid.uuid4()}{ext.lower()}")
                 file.save(image_path)
             else:
-                # 如果没有扩展名或扩展名不支持，尝试检测文件类型
                 if not ext:
-                    # # 尝试检测文件类型
-                    # # import imghdr
-                    # # file_path = os.path.join('output', f"{uuid.uuid4()}_temp")
-                    # # file.save(file_path)
-                    # # detected_type = imghdr.what(file_path)
-                    # # 使用 PIL.Image 替代 imghdr
-                    # from PIL import Image
-                    # try:
-                    #     with Image.open(file_path) as img:
-                    #         detected_type = img.format.lower()
-                    # except Exception:
-                    #     detected_type = None
-                    # if detected_type and detected_type in ['png', 'jpeg', 'gif', 'bmp']:
-                    #     # 重新命名文件加上正确的扩展名
-                    #     correct_ext = '.' + detected_type if detected_type != 'jpeg' else '.jpg'
-                    #     final_path = file_path + correct_ext
-                    #     os.rename(file_path, final_path)
-                    #     image_path = final_path
-                    # else:
-                    #     # 清理临时文件并返回错误
-                    #     if os.path.exists(file_path):
-                    #         os.remove(file_path)
-                    #     return jsonify({
-                    #         "success": False,
-                    #         "error_message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"
-                    #     })
-                    # 保存上传文件到临时路径
                     temp_filename = f"{uuid.uuid4()}_temp"
                     file_path = os.path.join('output', temp_filename)
                     file.save(file_path)
-
-                    # 使用 PIL 检测文件类型
                     try:
                         with Image.open(file_path) as img:
                             detected_type = img.format.lower()
                     except Exception:
                         detected_type = None
-
                     if detected_type and detected_type in ['png', 'jpeg', 'gif', 'bmp']:
                         correct_ext = '.' + detected_type if detected_type != 'jpeg' else '.jpg'
                         final_path = file_path + correct_ext
                         os.rename(file_path, final_path)
                         image_path = final_path
                     else:
-                        # 清理临时文件并返回错误
                         if os.path.exists(file_path):
                             os.remove(file_path)
-                        return jsonify({
-                            "success": False,
-                            "error_message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"
-                        })
+                        return jsonify({"success": False,"error_message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"})
                 else:
-                    return jsonify({
-                        "success": False, 
-                        "error_message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"
-                    })
+                    return jsonify({"success": False, "error_message": "不支持的图片格式，只支持 PNG, JPG, JPEG, BMP, GIF 格式"})
     
-    # 压缩图片（如果需要）
     if image_path and os.path.exists(image_path):
-        original_size = os.path.getsize(image_path) if os.path.exists(image_path) else 0
-        image_path = compress_image_if_needed(image_path, max_size_bytes=10 * 1024 * 1024)  # 10MB限制
+        original_size = os.path.getsize(image_path)
+        image_path = compress_image_if_needed(image_path, max_size_bytes=10 * 1024 * 1024)
         if os.path.exists(image_path):
             compressed_size = os.path.getsize(image_path)
             print(f"图片压缩: {original_size} bytes -> {compressed_size} bytes")
     
-    # 调用分析函数，传递用户输入的姓名
-    txt_file_path, error = analyze_image(image_path, request.form.get('name', '未知用户'))
-    
+    # 读取可选提示词，并只调用一次 analyze_image —— FIX: 去重
+    prompt_override = (request.form.get('prompt') or '').strip() or None
+    # txt_file_path, error = analyze_image(image_path, user_name)  # (旧) 多余调用
+    txt_file_path, error = analyze_image(image_path, user_name, prompt_override)
+
     if error:
-        return jsonify({
-            "success": False, 
-            "error_message": error
-        })
+        return jsonify({"success": False, "error_message": error})
     
-    # 生成PDF，将用户输入的姓名和图片路径传递给PDF生成器
     try:
-        user_name = request.form.get('name', '未知用户')
         pdf_file_path = generate_pdf_from_txt(txt_file_path, image_path, user_name)
-        
-        # 获取文件名用于下载链接
         txt_filename = os.path.basename(txt_file_path)
         pdf_filename = os.path.basename(pdf_file_path)
-        
-        return jsonify({
-            "success": True, 
-            "txt_filename": txt_filename, 
-            "pdf_filename": pdf_filename
-        })
+        return jsonify({"success": True, "txt_filename": txt_filename, "pdf_filename": pdf_filename})
     except Exception as e:
-        return jsonify({
-            "success": False, 
-            "error_message": f"生成PDF时出错: {str(e)}"
-        })
+        return jsonify({"success": False, "error_message": f"生成PDF时出错: {str(e)}"})
 
 @app.route('/web/download/<filename>')
 def web_download_file(filename):
